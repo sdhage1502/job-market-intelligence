@@ -1,0 +1,16 @@
+# dbt connection profiles definition
+# Supports dynamic credentials mapping via environment variables for local/CI portability
+
+job_market_analytics_profile:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      user: "{{ env_var('DBT_USER', 'postgres') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'postgres') }}"
+      port: {{ env_var('DBT_PORT', '5432') | int }}
+      dbname: "{{ env_var('DBT_ENV_DB', 'postgres') }}"
+      schema: public
+      threads: 4
+      keepalives_idle: 0

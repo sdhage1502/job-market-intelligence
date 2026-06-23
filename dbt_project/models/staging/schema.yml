@@ -1,0 +1,30 @@
+version: 2
+
+sources:
+  - name: raw_data
+    schema: public # The schema of raw tables loaded by python / seeded
+    tables:
+      - name: staging_jobs
+        description: "Raw job listings scraped from Naukri and Indeed"
+        columns:
+          - name: job_hash
+            tests:
+              - not_null
+      - name: dim_date
+        description: "Pre-seeded calendar date dimension table"
+        columns:
+          - name: date_key
+            tests:
+              - not_null
+              - unique
+
+models:
+  - name: stg_jobs
+    description: "Casted and cleaned staging table from raw job listings"
+    columns:
+      - name: job_hash
+        tests:
+          - not_null
+      - name: posted_date
+        tests:
+          - not_null

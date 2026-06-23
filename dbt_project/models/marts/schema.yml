@@ -1,0 +1,86 @@
+version: 2
+
+models:
+  - name: dim_company
+    description: "Company dimension table containing company details and industries"
+    columns:
+      - name: company_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_location
+    description: "Location dimension table standardizing cities and remote settings"
+    columns:
+      - name: location_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_skill
+    description: "Skill dimension table listing unique skills and categories"
+    columns:
+      - name: skill_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_date
+    description: "Date dimension table for calendar filters and time intelligence"
+    columns:
+      - name: date_key
+        tests:
+          - not_null
+          - unique
+
+  - name: dim_salary
+    description: "Salary dimension table with parsed numeric bounds"
+    columns:
+      - name: salary_key
+        tests:
+          - not_null
+          - unique
+
+  - name: fact_jobs
+    description: "Fact table mapping job postings to dimensions"
+    columns:
+      - name: job_key
+        tests:
+          - not_null
+          - unique
+      - name: company_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_company')
+              field: company_key
+      - name: location_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_location')
+              field: location_key
+      - name: date_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: salary_key
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_salary')
+              field: salary_key
+
+  - name: mart_skill_trends
+    description: "Skill trends reporting table counting postings by date and skill"
+
+  - name: mart_salary_trends
+    description: "Salary trends reporting table computing averages by role, company, and city"
+
+  - name: mart_location_trends
+    description: "Location trends reporting table counting postings by city and remote setting"
+
+  - name: mart_company_hiring
+    description: "Company hiring trends table counting postings by company and industry over time"

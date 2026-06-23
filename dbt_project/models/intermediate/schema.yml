@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: int_deduplicate_jobs
+    description: "Job postings deduplicated by job_hash keeping latest"
+    columns:
+      - name: job_hash
+        tests:
+          - not_null
+          - unique
+
+  - name: int_skills_exploded
+    description: "Expanded skills parsed line-by-line per job posting"
+    columns:
+      - name: job_hash
+        tests:
+          - not_null
+      - name: skill_name
+        tests:
+          - not_null

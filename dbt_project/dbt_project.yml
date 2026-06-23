@@ -1,0 +1,37 @@
+# dbt Core Project Configuration for Automated Job Market Platform
+
+name: 'job_market_analytics'
+version: '1.0.0'
+config-version: 2
+
+# This name links to the connection profile defined in profiles.yml
+profile: 'job_market_analytics_profile'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Configure materialization strategies for models
+models:
+  job_market_analytics:
+    # Staging models parse raw formats, materializing as views
+    staging:
+      +materialized: view
+      +schema: staging
+    
+    # Intermediate models do complex transforms, materializing as ephemeral tables (or views)
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+      
+    # Mart models materialize as tables in our analytical data warehouse
+    marts:
+      +materialized: table
+      +schema: public

@@ -1,0 +1,98 @@
+name: Automated Job Market Analytics Pipeline
+
+on:
+  schedule:
+    # Run daily at 1:00 AM UTC
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    # Allow manual runs from GitHub UI
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Parse Supabase Connection URL
+        id: parse_url
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "Error: SUPABASE_DB_URL secret is not set!"
+            exit 1
+          fi
+          # Parse PostgreSQL connection string using Python utility
+          python -c "
+          import urllib.parse, os, sys
+          try:
+              url = urllib.parse.urlparse(os.environ['SUPABASE_DB_URL'])
+              with open(os.environ['GITHUB_ENV'], 'a') as f:
+                  f.write(f'DBT_HOST={url.hostname}\n')
+                  f.write(f'DBT_USER={url.username}\n')
+                  f.write(f'DBT_PASSWORD={url.password}\n')
+                  f.write(f'DBT_PORT={url.port or 5432}\n')
+                  f.write(f'DBT_ENV_DB={url.path.lstrip(\"/\")}\n')
+              print('Successfully parsed database URL.')
+          except Exception as e:
+              print(f'Error parsing database URL: {e}', file=sys.stderr)
+              sys.exit(1)
+          "
+
+      - name: Run Database Initialization
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # Apply raw DDL tables and seed date configurations using python
+          python -c "
+          import psycopg2, os
+          conn = psycopg2.connect(os.environ['SUPABASE_DB_URL'])
+          with conn.cursor() as cur:
+              print('Running schema.sql...')
+              with open('database/schema.sql') as f:
+                  cur.execute(f.read())
+              print('Running seed.sql...')
+              with open('database/seed.sql') as f:
+                  cur.execute(f.read())
+          conn.commit()
+          conn.close()
+          print('Database schema initialization completed.')
+          "
+
+      - name: Run Scraper ETL
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          MOCK_DATA_FALLBACK: "False" # Attempt live scrape, automatically falls back if blocked
+        run: |
+          python scraper/main.py
+
+      - name: Commit Scraped Snapshots
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add data/raw/ data/processed/
+          # Commit only if there are changes to save daily history
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: nightly scraper snapshot [skip ci]"
+          git push origin main || echo "No changes to push or branch protected."
+
+      - name: Run dbt Transformations
+        env:
+          DBT_PROFILES_DIR: ./dbt_project
+        run: |
+          cd dbt_project
+          dbt debug
+          dbt run
+          dbt test
