@@ -63,29 +63,33 @@ automated-job-market-platform/
 │   │── processed/         # Structured cleaned JSON records
 │
 │── database/
-│   │── schema.sql         # SQL schema definitions for staging, dimensions, and facts
-│   │── seed.sql           # Initial database seeds (dim_date, dim_skill, dim_company)
+│   │── schema.sql             # SQL schema definitions for staging, dimensions, and facts
+│   │── seed.sql               # Initial database seeds (dim_date, dim_skill, dim_company)
+│   │── analytics_queries.sql  # 10 production SQL analytics queries (LAG, RANK, ROW_NUMBER, CTEs)
 │
-│── dbt_project/           # dbt Core project directory
-│   │── dbt_project.yml    # dbt configuration file
-│   │── profiles.yml       # dbt connection profiles (PostgreSQL)
+│── dbt_project/               # dbt Core project directory
+│   │── dbt_project.yml        # dbt configuration file
+│   │── profiles.yml           # dbt connection profiles (PostgreSQL)
 │   │── models/
-│   │   │── staging/       # Cast types & base schemas (stg_jobs)
-│   │   │── intermediate/  # Deduplication and unnest parsing (int_deduplicate_jobs, int_skills_exploded)
-│   │   │── marts/         # Dimensions, facts, and analytical trends (dim_*, fact_jobs, mart_*)
+│   │   │── staging/           # Cast types & base schemas (stg_jobs, stg_companies, stg_locations, stg_skills)
+│   │   │── intermediate/      # Deduplication and unnest parsing (int_deduplicate_jobs, int_skills_exploded)
+│   │   │── marts/             # Dimensions, facts, and analytical trends (dim_*, fact_jobs, mart_*)
 │
 │── docker/
-│   │── Dockerfile         # Docker recipe for execution container
+│   │── Dockerfile             # Docker recipe for execution container
 │
 │── powerbi/
-│   │── README.md          # DAX calculations, schema layout, and visual configuration
+│   │── README.md              # DAX calculations, schema layout, visual configuration (5 pages)
 │
 │── .github/
 │   │── workflows/
-│   │   │── pipeline.yml   # Daily scheduled run (scraper, dbt run, verification)
+│   │   │── pipeline.yml       # Daily scheduled run (scraper, dbt run, verification)
 │
-│── requirements.txt       # Dependencies
-└── README.md              # Documentation
+│── docker-compose.yml         # Local dev: PostgreSQL + ETL + dbt in one command
+│── .gitignore                 # Standard Python/dbt/Docker ignore rules
+│── requirements.txt           # Dependencies
+│── test_pipeline.py           # End-to-end integration test (SQLite mock)
+└── README.md                  # Documentation
 ```
 
 ---
@@ -153,7 +157,25 @@ dbt test
 
 ## 🚢 Dockerized Run
 
-To build the image and run the pipeline inside a container:
+### Option A: Docker Compose (Recommended for Local Dev)
+
+Spin up PostgreSQL + run the full ETL + dbt pipeline in one command:
+
+```bash
+docker-compose up --build
+```
+
+This will:
+1. Start a local PostgreSQL 16 instance with auto-initialized schema & seed data
+2. Run the Python ETL pipeline (extract → transform → load)
+3. Execute `dbt run` and `dbt test` against the warehouse
+
+To tear down:
+```bash
+docker-compose down -v
+```
+
+### Option B: Standalone Docker (Production / CI)
 
 ```bash
 docker build -f docker/Dockerfile -t job-analytics-etl .
@@ -231,3 +253,65 @@ FROM mart_location_trends
 GROUP BY city
 ORDER BY job_postings_count DESC;
 ```
+
+### 5. Top Hiring Companies (using RANK)
+```sql
+WITH company_postings AS (
+    SELECT 
+        company_name, industry,
+        SUM(posting_count) AS total_postings
+    FROM mart_company_hiring
+    GROUP BY 1, 2
+)
+SELECT 
+    company_name, industry, total_postings,
+    RANK() OVER (ORDER BY total_postings DESC) AS company_rank
+FROM company_postings
+ORDER BY company_rank
+LIMIT 20;
+```
+
+### 6. Experience Bracket Distribution
+```sql
+SELECT
+    experience_bracket,
+    SUM(posting_count) AS total_postings,
+    ROUND(AVG(avg_salary_for_bracket), 2) AS avg_salary_for_bracket,
+    ROUND(SUM(posting_count) * 100.0 / SUM(SUM(posting_count)) OVER (), 2) AS bracket_percentage
+FROM mart_experience_trends
+GROUP BY experience_bracket, bracket_sort_order
+ORDER BY bracket_sort_order;
+```
+
+> **📁 Full Query Set**: See [`database/analytics_queries.sql`](database/analytics_queries.sql) for all 10 production SQL analytics queries.
+
+---
+
+## 📈 KPIs Tracked
+
+| KPI | Source |
+|-----|--------|
+| Total Jobs Scraped | `fact_jobs` |
+| Average Salary | `dim_salary` |
+| Top Hiring Company | `mart_company_hiring` |
+| Top Hiring City | `mart_location_trends` |
+| Most Demanded Skill | `mart_skill_trends` |
+| Fastest Growing Skill | `mart_skill_trends` + LAG() |
+| Remote Hiring % | `dim_location` |
+| Entry-Level Job % | `mart_experience_trends` |
+
+---
+
+## 🧪 Testing
+
+Run the end-to-end integration test (uses SQLite as mock database):
+
+```bash
+python test_pipeline.py
+```
+
+This validates:
+1. Extraction generates records (mock fallback)
+2. Transformation cleans data, normalizes cities, generates hashes
+3. Loading with UPSERT deduplication works correctly
+4. Hash uniqueness constraints are enforced

@@ -1,0 +1,56 @@
+# Docker Compose for Local Development
+# Provides a local PostgreSQL instance so the pipeline can run without Supabase
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: job_market_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Auto-run schema and seed on first boot
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  etl:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: job_market_etl
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SUPABASE_DB_URL: "postgresql://postgres:postgres@postgres:5432/postgres"
+      MOCK_DATA_FALLBACK: "True"
+      DBT_HOST: "postgres"
+      DBT_USER: "postgres"
+      DBT_PASSWORD: "postgres"
+      DBT_PORT: "5432"
+      DBT_ENV_DB: "postgres"
+      DBT_PROFILES_DIR: "/app/dbt_project"
+    command: >
+      sh -c "
+        echo '=== Running ETL Pipeline ===' &&
+        python scraper/main.py &&
+        echo '=== Running dbt Transformations ===' &&
+        cd dbt_project &&
+        dbt run &&
+        dbt test &&
+        echo '=== Pipeline Complete ==='
+      "
+
+volumes:
+  pgdata:

@@ -84,3 +84,13 @@ models:
 
   - name: mart_company_hiring
     description: "Company hiring trends table counting postings by company and industry over time"
+
+  - name: mart_experience_trends
+    description: "Experience bracket distribution and salary correlation for talent level analysis"
+    columns:
+      - name: experience_bracket
+        tests:
+          - not_null
+      - name: posting_count
+        tests:
+          - not_null

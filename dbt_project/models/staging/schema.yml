@@ -28,3 +28,26 @@ models:
       - name: posted_date
         tests:
           - not_null
+
+  - name: stg_companies
+    description: "Distinct company names extracted from raw staging_jobs"
+    columns:
+      - name: company_name
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_locations
+    description: "Distinct normalized locations extracted from raw staging_jobs"
+    columns:
+      - name: city
+        tests:
+          - not_null
+
+  - name: stg_skills
+    description: "Distinct skill names parsed from raw staging_jobs skills_raw field"
+    columns:
+      - name: skill_name
+        tests:
+          - not_null
+          - unique

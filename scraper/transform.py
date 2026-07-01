@@ -1,6 +1,7 @@
 # Job Transformation module for Automated Job Market Platform
 
 import re
+from datetime import datetime
 from typing import Dict, Any, List
 from scraper.utils import logger, generate_job_hash
 

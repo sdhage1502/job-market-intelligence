@@ -138,3 +138,56 @@ Highest Salary = MAX('dim_salary'[max_salary])
     * *8+ years (Lead/Principal)*
     Y-axis: `Total Jobs`.
   * **Experience vs Salary (Scatter Plot)**: X-axis: Experience required, Y-axis: Average Salary, Details: Job Title.
+  * **Entry-Level KPI Card**: `Entry-Level Job %` (see DAX below).
+
+---
+
+## Additional DAX Measures for Experience Analytics
+
+### 8. Entry-Level Jobs %
+```DAX
+Entry-Level Jobs % = 
+DIVIDE(
+    CALCULATE(
+        SUM('mart_experience_trends'[posting_count]),
+        'mart_experience_trends'[experience_bracket] = "0-2 years (Entry)"
+    ),
+    SUM('mart_experience_trends'[posting_count]),
+    0
+)
+```
+
+### 9. Top Hiring Company
+```DAX
+Top Hiring Company = 
+FIRSTNONBLANK(
+    TOPN(1, VALUES('mart_company_hiring'[company_name]),
+        CALCULATE(SUM('mart_company_hiring'[posting_count]))
+    ),
+    1
+)
+```
+
+### 10. Most Demanded Skill
+```DAX
+Most Demanded Skill = 
+FIRSTNONBLANK(
+    TOPN(1, VALUES('mart_skill_trends'[skill_name]),
+        CALCULATE(SUM('mart_skill_trends'[skill_frequency]))
+    ),
+    1
+)
+```
+
+---
+
+## Connection Setup in Power BI Desktop
+
+1. Open Power BI Desktop → **Get Data** → **PostgreSQL Database**.
+2. Enter Supabase connection details:
+   * Server: `aws-0-ap-south-1.pooler.supabase.com`
+   * Database: `postgres`
+3. Select tables: `fact_jobs`, `dim_company`, `dim_location`, `dim_skill`, `dim_date`, `dim_salary`, `mart_skill_trends`, `mart_salary_trends`, `mart_location_trends`, `mart_company_hiring`, `mart_experience_trends`.
+4. Navigate to **Model View** and configure relationships per the matrix above.
+5. Create a **Measures** table and add all DAX measures listed above.
+6. Build visuals per the page layouts documented in each section.
